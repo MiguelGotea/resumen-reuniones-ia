@@ -9,6 +9,7 @@
 # =============================================================================
 set -euo pipefail
 
+
 APP_DIR="/opt/resumen-reuniones-ia"
 AUDIO_DIR="$APP_DIR/audio"
 VENV_DIR="$APP_DIR/venv"
