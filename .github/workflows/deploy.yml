@@ -57,20 +57,27 @@ jobs:
           set -e
           cd ${{ secrets.DO_PATH }}
 
-          # Actualizar dependencias Python en el venv
-          venv/bin/pip install -r requirements.txt --quiet
+          if [ -d "venv" ]; then
+            # Actualizar dependencias Python en el venv
+            venv/bin/pip install -r requirements.txt --quiet
 
-          # Recargar systemd si el service file cambió
-          cp install/systemd/resumen-reuniones-ia.service /etc/systemd/system/resumen-reuniones-ia.service
-          systemctl daemon-reload
+            # Recargar systemd si el service file cambió
+            cp install/systemd/resumen-reuniones-ia.service /etc/systemd/system/resumen-reuniones-ia.service
+            systemctl daemon-reload
 
-          # Reiniciar servicio
-          systemctl restart resumen-reuniones-ia
-          sleep 2
+            # Reiniciar servicio
+            systemctl restart resumen-reuniones-ia
+            sleep 2
 
-          # Mostrar estado
-          echo "--- Estado del servicio ---"
-          systemctl status resumen-reuniones-ia --no-pager -l || true
+            # Mostrar estado
+            echo "--- Estado del servicio ---"
+            systemctl status resumen-reuniones-ia --no-pager -l || true
+          else
+            echo "⚠️  Primer deploy detectado (no existe venv)."
+            echo "👉 Ahora que los archivos están sincronizados, conéctate por SSH al VPS y ejecuta:"
+            echo "   cd ${{ secrets.DO_PATH }} && bash install/setup_vps.sh"
+            echo "   bash install/setup.sh"
+          fi
         EOF
 
     - name: ✅ Deploy completado
