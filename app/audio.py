@@ -4,7 +4,6 @@ audio.py — Manejo de fragmentos de audio y concatenación con ffmpeg
 
 import os
 import shutil
-import subprocess
 from pathlib import Path
 
 from . import config
@@ -55,9 +54,12 @@ def get_fragment_count(reunion_id: int) -> int:
 
 def concatenate_fragments(reunion_id: int) -> Path:
     """
-    Concatena todos los fragmentos en orden con ffmpeg.
+    Concatena todos los fragmentos en orden.
+    Como los fragmentos provienen de MediaRecorder.start(60000), 
+    son una secuencia continua de bytes de un único archivo WebM.
+    Solo el primer chunk tiene los headers válidos.
+    Por lo tanto, la concatenación binaria directa es el método correcto.
     Genera: AUDIO_DIR/<reunion_id>/final.webm
-    Retorna la ruta del archivo final.
     """
     d = _reunion_dir(reunion_id)
 
@@ -66,41 +68,15 @@ def concatenate_fragments(reunion_id: int) -> Path:
     if not fragments:
         raise RuntimeError(f"No hay fragmentos de audio para la reunión {reunion_id}")
 
-    log.info(f"[reunion {reunion_id}] Concatenando {len(fragments)} fragmentos...")
-
-    # Generar concat_list.txt
-    concat_file = d / 'concat_list.txt'
-    with open(concat_file, 'w') as f:
-        for frag in fragments:
-            f.write(f"file '{frag.resolve()}'\n")
+    log.info(f"[reunion {reunion_id}] Concatenando {len(fragments)} fragmentos de forma binaria...")
 
     final_path = d / 'final.webm'
-
-    cmd = [
-        'ffmpeg',
-        '-y',                    # sobrescribir si existe
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', str(concat_file),
-        '-c', 'copy',
-        str(final_path),
-    ]
-
-    log.info(f"[reunion {reunion_id}] ffmpeg: {' '.join(cmd)}")
-
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-
-    if result.returncode != 0:
-        log.error(f"[reunion {reunion_id}] ffmpeg stderr: {result.stderr}")
-        raise RuntimeError(
-            f"ffmpeg falló con código {result.returncode}. "
-            f"stderr: {result.stderr[-500:]}"
-        )
+    
+    # Concatenación binaria simple
+    with open(final_path, 'wb') as outfile:
+        for frag in fragments:
+            with open(frag, 'rb') as infile:
+                outfile.write(infile.read())
 
     size_mb = final_path.stat().st_size / (1024 * 1024)
     log.info(f"[reunion {reunion_id}] Audio concatenado: {final_path} ({size_mb:.1f} MB)")
