@@ -118,6 +118,34 @@ async def _reprocesar_reunion_background(token: str, reunion_data: dict):
         log.error(f"[reunion {reunion_id}] ❌ Error en RE-procesamiento: {e}")
 
 
+async def _transcribir_reunion_background(token: str, reunion_data: dict):
+    """
+    Tarea de fondo para generar SOLO la transcripción de una reunión.
+    """
+    reunion_id = reunion_data['reunion_id']
+
+    try:
+        log.info(f"[reunion {reunion_id}] Iniciando TRANSCRIPCIÓN de audio...")
+        final_path = audio_module.get_audio_path(reunion_id)
+        if not final_path:
+            log.warning(f"[reunion {reunion_id}] final.webm no existe. Intentando re-concatenar fragmentos...")
+            final_path = await asyncio.to_thread(audio_module.concatenate_fragments, reunion_id)
+
+        gemini_key_info = await asyncio.to_thread(api_client.get_gemini_key)
+
+        texto_transcripcion = await asyncio.to_thread(
+            gemini_client.generate_transcription,
+            final_path,
+            gemini_key_info,
+        )
+
+        await asyncio.to_thread(api_client.guardar_transcripcion, token, texto_transcripcion)
+        log.info(f"[reunion {reunion_id}] ✅ Transcripción guardada.")
+
+    except Exception as e:
+        log.error(f"[reunion {reunion_id}] ❌ Error en transcripción: {e}")
+
+
 # ── Endpoints API ─────────────────────────────────────────────
 
 @app.get("/api/info/{token}")
@@ -278,6 +306,44 @@ async def reprocesar_reunion(
     return JSONResponse({
         "success": True,
         "message": "Reprocesamiento IA iniciado.",
+        "reunion_id": reunion_id,
+    })
+
+
+@app.post("/api/transcribir/{token}")
+async def transcribir_reunion(
+    token: str,
+    background_tasks: BackgroundTasks,
+    x_resumen_token: str = Header(None, alias="X-Resumen-Token"),
+):
+    """
+    Inicia el proceso para generar solo la transcripción de la reunión.
+    """
+    if not x_resumen_token or x_resumen_token != config.RESUMEN_TOKEN_ERP:
+        raise HTTPException(status_code=401, detail="Token no autorizado")
+
+    reunion_data = validar_token(token)
+    reunion_id   = reunion_data['reunion_id']
+    estado       = reunion_data['estado']
+
+    if reunion_data.get('audio_borrado') == 1:
+        raise HTTPException(
+            status_code=409,
+            detail="No se puede transcribir: el audio ya fue borrado."
+        )
+
+    # Lanzar transcripción en background
+    background_tasks.add_task(
+        _transcribir_reunion_background,
+        token,
+        reunion_data,
+    )
+
+    log.info(f"[reunion {reunion_id}] Transcripción iniciada en background.")
+
+    return JSONResponse({
+        "success": True,
+        "message": "Generación de transcripción iniciada.",
         "reunion_id": reunion_id,
     })
 

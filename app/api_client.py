@@ -63,6 +63,17 @@ def guardar_resultado(token: str, resultado: dict, ruta_audio: str) -> dict:
     return resp
 
 
+def guardar_transcripcion(token: str, transcripcion: str) -> dict:
+    """Guarda solo la transcripción en la BD sin alterar el estado."""
+    resp = _post('guardar_transcripcion.php', {
+        'token':         token,
+        'transcripcion': transcripcion,
+    })
+    if not resp.get('success'):
+        raise RuntimeError(f"Error al guardar transcripción: {resp.get('error', resp)}")
+    return resp
+
+
 def get_gemini_key() -> dict:
     """Obtiene una API key activa de Gemini con rotación automática."""
     resp = _get('obtener_key_gemini.php')

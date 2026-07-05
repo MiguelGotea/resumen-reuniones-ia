@@ -40,15 +40,14 @@ Contexto de la reunión:
 - Título: {titulo}
 - Descripción: {descripcion}
 
-Tu tarea tiene TRES partes, y debes devolver el resultado obligatoriamente como un \
-único OBJETO JSON válido con tres claves exactas: "resultado_final", "resumen" y "transcripcion", \
-ESTRICTAMENTE EN ESE ORDEN.
+Tu tarea tiene DOS partes, y debes devolver el resultado obligatoriamente como un \
+único OBJETO JSON válido con dos claves exactas: "resultado_final" y "resumen".
 
 ─────────────────────────────────────────────────────
 CLAVE 1: "resultado_final"
 ─────────────────────────────────────────────────────
 Basándote en el audio, genera un resumen ejecutivo corporativo en formato Markdown \
-usando EXACTAMENTE estos encabezados (No incluyas el texto de la transcripción aquí):
+usando EXACTAMENTE estos encabezados:
   ## Decisiones Tomadas
   ## Tareas Asignadas
   ## Acuerdos y Compromisos
@@ -66,24 +65,25 @@ Un resumen general de toda la reunión, documentando todo lo que se habló sin n
 corporativo específico. Solo un resumen general de la discusión.
 
 ─────────────────────────────────────────────────────
-CLAVE 3: "transcripcion"
-─────────────────────────────────────────────────────
-Transcribe palabra por palabra todo lo que se dijo en el audio. Incluye el nombre del hablante \
-si se identifica (ej: "Juan: texto..."). Si hay varios hablantes no identificados, usa \
-"Hablante 1", "Hablante 2", etc.
-Si hay partes inaudibles, escribe [inaudible]. Si el audio está en silencio o vacío, escribe \
-"[Sin contenido de voz detectado en el audio]".
-
-─────────────────────────────────────────────────────
 FORMATO DE RESPUESTA (OBLIGATORIO):
 ─────────────────────────────────────────────────────
 Devuelve ÚNICAMENTE un string JSON válido, sin delimitadores de markdown (```json ... ```).
 Ejemplo:
 {{
   "resultado_final": "## Decisiones Tomadas...",
-  "resumen": "...",
-  "transcripcion": "..."
+  "resumen": "..."
 }}
+"""
+
+_TRANSCRIPTION_PROMPT_TEMPLATE = """\
+Eres un transcripto profesional experto.
+Transcribe palabra por palabra todo lo que se dijo en el audio de esta reunión corporativa.
+Incluye el nombre del hablante si se identifica (ej: "Juan: texto...").
+Si hay varios hablantes no identificados, usa "Hablante 1", "Hablante 2", etc.
+Si hay partes inaudibles, escribe [inaudible].
+Si el audio está en silencio o vacío, escribe "[Sin contenido de voz detectado en el audio]".
+
+No agregues comentarios ni introducciones, responde ÚNICAMENTE con la transcripción solicitada.
 """
 
 
@@ -239,11 +239,10 @@ def generate_summary(audio_path: Path, reunion_data: dict, gemini_key_info: dict
                 'responseSchema': {
                     'type': 'OBJECT',
                     'properties': {
-                        'transcripcion': {'type': 'STRING'},
                         'resumen': {'type': 'STRING'},
                         'resultado_final': {'type': 'STRING'},
                     },
-                    'required': ['transcripcion', 'resumen', 'resultado_final']
+                    'required': ['resumen', 'resultado_final']
                 }
             },
         }
@@ -252,7 +251,7 @@ def generate_summary(audio_path: Path, reunion_data: dict, gemini_key_info: dict
             GEMINI_CONTENT_URL.format(model=modelo),
             params={'key': api_key},
             json=payload,
-            timeout=300,  # reuniones de 1-2 h pueden tomar tiempo
+            timeout=300,
         )
         resp.raise_for_status()
 
@@ -287,26 +286,79 @@ def generate_summary(audio_path: Path, reunion_data: dict, gemini_key_info: dict
                 return ""
 
             rf_val = extraer_campo("resultado_final", texto)
-            res_val = extraer_campo("resumen", texto)
-            tr_val = extraer_campo("transcripcion", texto, es_ultimo=True)
+            res_val = extraer_campo("resumen", texto, es_ultimo=True)
             
-            if rf_val or res_val or tr_val:
+            if rf_val or res_val:
                 log.info("Se lograron recuperar los campos del JSON truncado.")
                 resultado = {
                     "resultado_final": rf_val or "No se pudo generar.",
                     "resumen": res_val or "No se pudo generar.",
-                    "transcripcion": tr_val + "\n\n[Nota: La transcripción se cortó automáticamente por el límite de procesamiento de la IA para reuniones largas.]"
+                    "transcripcion": ""
                 }
             else:
                 log.warning("No se pudieron extraer los campos con regex. Fallback a texto crudo.")
                 resultado = {
-                    "transcripcion": "Error: La respuesta no pudo ser procesada correctamente por longitud excesiva.",
+                    "transcripcion": "",
                     "resumen": "",
                     "resultado_final": texto
                 }
 
         log.info(f"✅ Resumen generado y validado como JSON.")
+        # Aseguramos que la transcripción vaya vacía por ahora
+        resultado["transcripcion"] = ""
         return resultado
+
+    finally:
+        if file_name:
+            _delete_gemini_file(file_name, api_key)
+
+
+def generate_transcription(audio_path: Path, gemini_key_info: dict) -> str:
+    """
+    Genera solo la transcripción del audio.
+    """
+    api_key = gemini_key_info['api_key']
+    modelo  = gemini_key_info.get('modelo', 'gemini-2.5-flash')
+    mime_type = _detect_mime(audio_path)
+
+    file_uri  = None
+    file_name = None
+
+    try:
+        file_uri, file_name = _upload_audio(audio_path, api_key)
+
+        log.info(f"🤖 Generando transcripción con {modelo}...")
+
+        payload = {
+            'contents': [{
+                'role': 'user',
+                'parts': [
+                    {'text': _TRANSCRIPTION_PROMPT_TEMPLATE},
+                    {'file_data': {'mime_type': mime_type, 'file_uri': file_uri}},
+                ],
+            }],
+            'generationConfig': {
+                'temperature':    0.1,
+                'maxOutputTokens': 8192,
+            },
+        }
+
+        resp = requests.post(
+            GEMINI_CONTENT_URL.format(model=modelo),
+            params={'key': api_key},
+            json=payload,
+            timeout=400,
+        )
+        resp.raise_for_status()
+
+        content = resp.json()
+        texto   = content['candidates'][0]['content']['parts'][0]['text']
+
+        if content['candidates'][0].get('finishReason') == 'MAX_TOKENS':
+            texto += "\n\n[Nota: La transcripción se cortó automáticamente debido al límite de procesamiento de la IA para audios tan largos.]"
+
+        log.info(f"✅ Transcripción generada.")
+        return texto
 
     finally:
         if file_name:
