@@ -78,11 +78,11 @@ FORMATO DE RESPUESTA (OBLIGATORIO):
 ─────────────────────────────────────────────────────
 Devuelve ÚNICAMENTE un string JSON válido, sin delimitadores de markdown (```json ... ```).
 Ejemplo:
-{
+{{
   "transcripcion": "...",
   "resumen": "...",
   "resultado_final": "## Decisiones Tomadas..."
-}
+}}
 """
 
 
