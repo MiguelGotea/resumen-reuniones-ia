@@ -40,10 +40,11 @@ Contexto de la reunión:
 - Título: {titulo}
 - Descripción: {descripcion}
 
-Tu tarea tiene DOS partes:
+Tu tarea tiene TRES partes, y debes devolver el resultado obligatoriamente como un \
+único OBJETO JSON válido con tres claves exactas: "transcripcion", "resumen" y "resultado_final".
 
 ─────────────────────────────────────────────────────
-PARTE 1 — TRANSCRIPCIÓN LITERAL
+CLAVE 1: "transcripcion"
 ─────────────────────────────────────────────────────
 Transcribe palabra por palabra todo lo que se dijo en el audio. Incluye el nombre del hablante \
 si se identifica (ej: "Juan: texto..."). Si hay varios hablantes no identificados, usa \
@@ -52,10 +53,16 @@ Si hay partes inaudibles, escribe [inaudible]. Si el audio está en silencio o v
 "[Sin contenido de voz detectado en el audio]".
 
 ─────────────────────────────────────────────────────
-PARTE 2 — RESUMEN EJECUTIVO
+CLAVE 2: "resumen"
 ─────────────────────────────────────────────────────
-Basándote en la transcripción anterior, genera un resumen ejecutivo usando EXACTAMENTE estos \
-encabezados Markdown:
+Un resumen general de toda la reunión, documentando todo lo que se habló sin ningún enfoque \
+corporativo específico. Solo un resumen general de la discusión.
+
+─────────────────────────────────────────────────────
+CLAVE 3: "resultado_final"
+─────────────────────────────────────────────────────
+Basándote en la transcripción, genera un resumen ejecutivo corporativo en formato Markdown \
+usando EXACTAMENTE estos encabezados (No incluyas el texto de la transcripción aquí):
   ## Decisiones Tomadas
   ## Tareas Asignadas
   ## Acuerdos y Compromisos
@@ -69,25 +76,13 @@ Usa texto limpio, profesional. NO inventes información que no esté en el audio
 ─────────────────────────────────────────────────────
 FORMATO DE RESPUESTA (OBLIGATORIO):
 ─────────────────────────────────────────────────────
-Responde ÚNICAMENTE con el siguiente Markdown, sin texto introductorio ni conclusivo:
-
-## Transcripción
-
-[transcripción literal aquí]
-
----
-
-## Decisiones Tomadas
-[contenido]
-
-## Tareas Asignadas
-[contenido]
-
-## Acuerdos y Compromisos
-[contenido]
-
-## Puntos de Seguimiento
-[contenido]\
+Devuelve ÚNICAMENTE un string JSON válido, sin delimitadores de markdown (```json ... ```).
+Ejemplo:
+{
+  "transcripcion": "...",
+  "resumen": "...",
+  "resultado_final": "## Decisiones Tomadas..."
+}
 """
 
 
@@ -239,7 +234,7 @@ def generate_summary(audio_path: Path, reunion_data: dict, gemini_key_info: dict
             'generationConfig': {
                 'temperature':    0.1,
                 'maxOutputTokens': 8192,
-                # Sin response_mime_type para obtener texto Markdown libre
+                'response_mime_type': 'application/json',
             },
         }
 
@@ -254,8 +249,19 @@ def generate_summary(audio_path: Path, reunion_data: dict, gemini_key_info: dict
         content = resp.json()
         texto   = content['candidates'][0]['content']['parts'][0]['text']
 
-        log.info(f"✅ Resumen generado ({len(texto)} caracteres)")
-        return texto.strip()
+        try:
+            import json
+            resultado = json.loads(texto)
+        except json.JSONDecodeError:
+            log.error(f"Error parsing Gemini JSON output: {texto[:200]}...")
+            resultado = {
+                "transcripcion": "Error: La respuesta no es un JSON válido.",
+                "resumen": "",
+                "resultado_final": texto
+            }
+
+        log.info(f"✅ Resumen generado y validado como JSON.")
+        return resultado
 
     finally:
         if file_name:

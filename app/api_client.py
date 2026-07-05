@@ -49,11 +49,13 @@ def actualizar_estado(token: str, estado: str) -> dict:
     return resp
 
 
-def guardar_resultado(token: str, resultado_final: str, ruta_audio: str) -> dict:
-    """Guarda el resumen Markdown generado por Gemini y pasa estado a 'completada'."""
+def guardar_resultado(token: str, resultado: dict, ruta_audio: str) -> dict:
+    """Guarda el resumen JSON generado por Gemini y pasa estado a 'completada'."""
     resp = _post('guardar_resultado.php', {
         'token':           token,
-        'resultado_final': resultado_final,
+        'resultado_final': resultado.get('resultado_final', ''),
+        'transcripcion':   resultado.get('transcripcion', ''),
+        'resumen':         resultado.get('resumen', ''),
         'ruta_audio':      ruta_audio,
     })
     if not resp.get('success'):
