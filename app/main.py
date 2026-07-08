@@ -91,11 +91,15 @@ async def _reprocesar_reunion_background(token: str, reunion_data: dict):
         log.info(f"[reunion {reunion_id}] Iniciando RE-procesamiento IA...")
         await asyncio.to_thread(api_client.actualizar_estado, token, 'procesando')
 
-        # Verificamos si existe el final.webm, si no, intentamos concatenar si hay fragmentos
-        final_path = audio_module.get_audio_path(reunion_id)
-        if not final_path:
-            log.warning(f"[reunion {reunion_id}] final.webm no existe. Intentando re-concatenar fragmentos...")
+        # Siempre forzar re-concatenar en reprocesamiento para asegurar conversión a MP3
+        log.info(f"[reunion {reunion_id}] Re-concatenando fragmentos y convirtiendo a MP3...")
+        try:
             final_path = await asyncio.to_thread(audio_module.concatenate_fragments, reunion_id)
+        except Exception as e:
+            log.warning(f"[reunion {reunion_id}] Error al re-concatenar (¿sin chunks?): {e}")
+            final_path = audio_module.get_audio_path(reunion_id)
+            if not final_path:
+                raise RuntimeError("No hay final.mp3, final.webm ni fragmentos para procesar.")
 
         # Obtener key de Gemini
         gemini_key_info = await asyncio.to_thread(api_client.get_gemini_key)
@@ -388,10 +392,11 @@ async def descargar_audio(token: str):
             detail="Audio no encontrado o ya fue borrado."
         )
         
+    media_type = "audio/mpeg" if audio_path.suffix == ".mp3" else "audio/webm"
     return FileResponse(
         audio_path, 
-        media_type="audio/webm", 
-        filename=f"reunion_{reunion_id}.webm"
+        media_type=media_type, 
+        filename=f"reunion_{reunion_id}{audio_path.suffix}"
     )
 
 @app.get("/health")

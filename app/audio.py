@@ -70,7 +70,7 @@ def concatenate_fragments(reunion_id: int) -> Path:
 
     log.info(f"[reunion {reunion_id}] Concatenando {len(fragments)} fragmentos de forma binaria...")
 
-    final_path = d / 'final.webm'
+    final_path = d / 'final.mp3'
     final_temp_path = d / 'final_temp.webm'
     
     # Concatenación binaria simple
@@ -79,19 +79,20 @@ def concatenate_fragments(reunion_id: int) -> Path:
             with open(frag, 'rb') as infile:
                 outfile.write(infile.read())
 
-    # Reparar metadatos (duración) con ffmpeg para que sea seekable
+    # Convertir a MP3 con ffmpeg para garantizar soporte de barra de tiempo y compatibilidad
     import subprocess
     try:
         subprocess.run(
-            ['ffmpeg', '-y', '-i', str(final_temp_path), '-c', 'copy', str(final_path)],
+            ['ffmpeg', '-y', '-i', str(final_temp_path), '-c:a', 'libmp3lame', '-b:a', '64k', '-ac', '1', str(final_path)],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
         final_temp_path.unlink() # Eliminar temporal
     except Exception as e:
-        log.error(f"[reunion {reunion_id}] Error al reparar WebM con ffmpeg, usando concatenado binario: {e}")
-        # Fallback a concatenado binario
+        log.error(f"[reunion {reunion_id}] Error al convertir a MP3 con ffmpeg: {e}")
+        # Fallback a concatenado binario en webm
+        final_path = d / 'final.webm'
         if final_temp_path.exists():
             final_temp_path.rename(final_path)
 
@@ -115,6 +116,12 @@ def delete_audio(reunion_id: int) -> bool:
 
 
 def get_audio_path(reunion_id: int) -> Path | None:
-    """Retorna la ruta del final.webm si existe."""
-    p = Path(config.AUDIO_DIR) / str(reunion_id) / 'final.webm'
-    return p if p.exists() else None
+    """Retorna la ruta del archivo de audio final (mp3 o webm) si existe."""
+    d = Path(config.AUDIO_DIR) / str(reunion_id)
+    
+    p_mp3 = d / 'final.mp3'
+    if p_mp3.exists():
+        return p_mp3
+        
+    p_webm = d / 'final.webm'
+    return p_webm if p_webm.exists() else None
