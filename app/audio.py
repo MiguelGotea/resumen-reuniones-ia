@@ -83,7 +83,7 @@ def concatenate_fragments(reunion_id: int) -> Path:
     import subprocess
     try:
         subprocess.run(
-            ['ffmpeg', '-y', '-i', str(final_temp_path), '-c:a', 'libmp3lame', '-b:a', '64k', '-ac', '1', str(final_path)],
+            ['ffmpeg', '-y', '-i', str(final_temp_path), '-c:a', 'libmp3lame', '-b:a', '64k', '-ac', '1', '-ar', '16000', str(final_path)],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
