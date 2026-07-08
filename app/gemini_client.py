@@ -64,6 +64,28 @@ ETIQUETA 2: <RESUMEN>
 Un resumen general de toda la reunión, documentando detalladamente todo lo que se habló, \
 discutió y acordó, sin títulos ni formato corporativo adicional.
 
+INSTRUCCIONES DE PROFUNDIDAD (obligatorias):
+- Prioriza la EXHAUSTIVIDAD sobre la brevedad. No comprimas contenido relevante para ahorrar espacio.
+- Para cada decisión, tarea o acuerdo, incluye siempre que esté disponible en el audio:
+  · Quién lo propuso (usa "Hablante 1", "Hablante 2", etc. de forma consistente, con
+    rol/área entre paréntesis si es inferible del contexto)
+  · El contexto o razón detrás de la decisión
+  · Cifras, montos, fechas o plazos exactos mencionados
+  · Estado: confirmado / pendiente de confirmación / en discusión sin cierre
+- Evita frases genéricas tipo "se discutieron varios temas". Nombra explícitamente cada tema.
+- Agrega un quinto encabezado:
+  ## Temas Discutidos sin Resolución
+  (puntos debatidos que no llegaron a una decisión o acuerdo claro — esto es tan importante
+  como las decisiones tomadas, no lo omitas aunque parezca secundario)
+- Si la reunión abarcó múltiples bloques temáticos, organizá cada sección agrupada por tema.
+
+GESTIÓN DE ESPACIO (crítico para reuniones largas):
+Tu respuesta tiene un límite de tokens. Si la reunión es extensa y sentís que no vas a
+alcanzar a desarrollar todo con el mismo nivel de detalle:
+- NUNCA cortes una etiqueta a mitad de frase o de sección.
+- Si debés recortar, hacelo en <RESUMEN>, condensando los tramos menos relevantes,
+  pero completa siempre las 5 secciones de <RESULTADO_FINAL> de forma íntegra.
+
 ─────────────────────────────────────────────────────
 FORMATO DE RESPUESTA (OBLIGATORIO):
 ─────────────────────────────────────────────────────
@@ -235,8 +257,8 @@ def generate_summary(audio_path: Path, reunion_data: dict, gemini_key_info: dict
                 ],
             }],
             'generationConfig': {
-                'temperature': 0.1,
-                'maxOutputTokens': 8192,
+                'temperature': 0.2,
+                'maxOutputTokens': 16000,
             },
         }
 
