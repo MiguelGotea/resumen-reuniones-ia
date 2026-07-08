@@ -239,10 +239,10 @@ def generate_summary(audio_path: Path, reunion_data: dict, gemini_key_info: dict
                 'responseSchema': {
                     'type': 'OBJECT',
                     'properties': {
-                        'resumen': {'type': 'STRING'},
                         'resultado_final': {'type': 'STRING'},
+                        'resumen': {'type': 'STRING'},
                     },
-                    'required': ['resumen', 'resultado_final']
+                    'required': ['resultado_final', 'resumen']
                 }
             },
         }
@@ -267,13 +267,10 @@ def generate_summary(audio_path: Path, reunion_data: dict, gemini_key_info: dict
             # Intento de recuperación manual del JSON truncado por el límite de tokens
             import re
             
-            def extraer_campo(campo, texto_completo, es_ultimo=False):
+            def extraer_campo(campo, texto_completo):
                 # Busca el campo asumiendo que su valor es un string
-                # Si es el último campo, el cierre de comillas puede faltar si se truncó
+                # [^"\\]* siempre se detiene en la comilla de cierre o al final si se truncó
                 patron = f'"{campo}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)'
-                if not es_ultimo:
-                    patron += '"'
-                    
                 match = re.search(patron, texto_completo)
                 if match:
                     val = match.group(1)
@@ -286,7 +283,7 @@ def generate_summary(audio_path: Path, reunion_data: dict, gemini_key_info: dict
                 return ""
 
             rf_val = extraer_campo("resultado_final", texto)
-            res_val = extraer_campo("resumen", texto, es_ultimo=True)
+            res_val = extraer_campo("resumen", texto)
             
             if rf_val or res_val:
                 log.info("Se lograron recuperar los campos del JSON truncado.")
