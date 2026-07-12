@@ -167,7 +167,6 @@ async def info_reunion(token: str):
         "titulo":         reunion_data.get('titulo', ''),
         "descripcion":    reunion_data.get('descripcion', ''),
         "estado":         reunion_data.get('estado', 'creada'),
-        "token_expira":   reunion_data.get('token_expira', ''),
         "fragment_count": fragment_count,
     })
 

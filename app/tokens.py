@@ -23,8 +23,6 @@ def validar_token(token: str) -> dict:
         return datos
     except RuntimeError as e:
         msg = str(e).lower()
-        if 'expirado' in msg or 'expired' in msg:
-            raise HTTPException(status_code=403, detail="El token de esta reunión ha expirado (6 horas)")
         if 'cerrad' in msg:
             raise HTTPException(status_code=410, detail="Esta reunión ha sido cerrada. El acceso fue revocado.")
         if 'no encontrad' in msg or 'not found' in msg:
